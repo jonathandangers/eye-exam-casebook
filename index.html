@@ -794,7 +794,7 @@ function casesHome(){
   </section>
   ${groups}
   <footer class="foot">
-    <span><a class="textlink" href="#/terms">Abbreviations and terms</a></span>
+    <span><a class="textlink" href="#/terms">Abbreviations and terms</a></span><span>Anonymous usage is counted. No cookies or personal identifiers.</span>
     <span>References are listed in each guide.</span>
     <span>Clinical teaching cases. Follow local protocols and consultant guidance.</span>
   </footer>`;
@@ -1020,7 +1020,7 @@ function summaryPage(){
   ${missed.length?`<section class="blk"><p class="blk-h">Exam steps to review</p><div class="review">${missed.map(k=>{const i=TILES.findIndex(t=>t.k===k); return `<a href="#/exam/${k}"><span class="rn">${i+1}</span>${TILES[i].name}</a>`;}).join("")}</div></section>`:""}
   <section class="sum-list">${rows}</section>
   <div class="next-row" style="margin-top:18px"><a class="secondary" href="#/cases" style="text-decoration:none;color:inherit">All cases</a><button class="secondary" id="clearBtn">Clear my results</button></div>
-  <footer class="foot"><span><a class="textlink" href="#/terms">Abbreviations and terms</a></span></footer>`;
+  <footer class="foot"><span><a class="textlink" href="#/terms">Abbreviations and terms</a></span><span>Anonymous usage is counted. No cookies or personal identifiers.</span></footer>`;
   document.getElementById("clearBtn").onclick=()=>{ results={}; store.set("eyecb-results-v2",results); Object.keys(SAVED).forEach(k=>delete SAVED[k]); summaryPage(); };
   removeBar();
   window.scrollTo(0,0);
@@ -1037,7 +1037,7 @@ function termsPage(back){
   <header class="sum-head"><h1>Abbreviations and terms</h1></header>
   <section class="part"><h2>Abbreviations</h2><div class="map">${ABBR.map(row).join("")}</div></section>
   <section class="part"><h2>Terms</h2><div class="map">${terms.map(row).join("")}</div></section>
-  <footer class="foot"><span>Jonathan Dangers, MD, MPH.</span><span>Clinical teaching material. Follow local protocols and consultant guidance.</span></footer>`;
+  <footer class="foot"><span>Anonymous usage is counted. No cookies or personal identifiers.</span><span>Jonathan Dangers, MD, MPH.</span><span>Clinical teaching material. Follow local protocols and consultant guidance.</span></footer>`;
   removeBar();
   window.scrollTo(0,0);
 }
@@ -1119,7 +1119,7 @@ function hub(){
     </a>
   </div>
   <footer class="foot">
-    <span><a class="textlink" href="#/terms">Abbreviations and terms</a></span>
+    <span><a class="textlink" href="#/terms">Abbreviations and terms</a></span><span>Anonymous usage is counted. No cookies or personal identifiers.</span>
     <span>References are listed in each guide.</span>
     <span>Clinical teaching material. Follow local protocols and consultant guidance.</span>
   </footer>`;
@@ -1358,7 +1358,7 @@ function examPage(target){
   <details class="refs" id="x-refs"><summary>References</summary><ol>${REFS.map(([t,u])=>`<li>${esc(t)} <a href="${u}" target="_blank" rel="noopener">Link</a></li>`).join("")}</ol></details>
 
   <footer class="foot">
-    <span><a class="textlink" href="#/terms">Abbreviations and terms</a></span>
+    <span><a class="textlink" href="#/terms">Abbreviations and terms</a></span><span>Anonymous usage is counted. No cookies or personal identifiers.</span>
     <span>Jonathan Dangers, MD, MPH.</span>
     <span>Clinical teaching material. Follow local protocols and consultant guidance.</span>
   </footer>`;
@@ -1805,7 +1805,7 @@ function learnPage(key, target){
   </section>
 
   <details class="refs" id="l-refs"><summary>References</summary><ol>${L.refs.map(([t,u])=>`<li>${esc(t)} <a href="${u}" target="_blank" rel="noopener">Link</a></li>`).join("")}</ol></details>
-  <footer class="foot"><span><a class="textlink" href="#/terms">Abbreviations and terms</a></span><span>Jonathan Dangers, MD, MPH.</span><span>Clinical teaching material. Follow local protocols and consultant guidance.</span></footer>
+  <footer class="foot"><span><a class="textlink" href="#/terms">Abbreviations and terms</a></span><span>Anonymous usage is counted. No cookies or personal identifiers.</span><span>Jonathan Dangers, MD, MPH.</span><span>Clinical teaching material. Follow local protocols and consultant guidance.</span></footer>
   </div>`;
 
   app.querySelectorAll("[data-jump]").forEach(a=>a.addEventListener("click",e=>{e.preventDefault();
@@ -1934,7 +1934,7 @@ function approachPage(){
   </section>
 
   <details class="refs" id="a-refs"><summary>References</summary><ol>${AP_REFS.map(([t,u])=>`<li>${esc(t)} <a href="${u}" target="_blank" rel="noopener">Link</a></li>`).join("")}</ol></details>
-  <footer class="foot"><span><a class="textlink" href="#/terms">Abbreviations and terms</a></span><span>Jonathan Dangers, MD, MPH.</span><span>Clinical teaching material. Follow local protocols and consultant guidance.</span></footer>`;
+  <footer class="foot"><span><a class="textlink" href="#/terms">Abbreviations and terms</a></span><span>Anonymous usage is counted. No cookies or personal identifiers.</span><span>Jonathan Dangers, MD, MPH.</span><span>Clinical teaching material. Follow local protocols and consultant guidance.</span></footer>`;
 
   app.querySelectorAll("[data-jump]").forEach(a=>a.addEventListener("click",e=>{e.preventDefault();
     if(a.dataset.jump==="a-refs") document.getElementById("a-refs").open=true;
@@ -1954,6 +1954,12 @@ function approachPage(){
 
 route();
 </script>
+<script>
+window.goatcounter = {no_onload:true};
+function gcCount(){ if(window.goatcounter.count) window.goatcounter.count({path:location.pathname+(location.hash||"#/")}); }
+window.addEventListener("hashchange",gcCount);
+</script>
+<script data-goatcounter="https://eye-emergencies.goatcounter.com/count" async src="https://gc.zgo.at/count.js" onload="gcCount()"></script>
 
 </body>
 </html>
