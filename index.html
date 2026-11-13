@@ -272,6 +272,7 @@ button:focus-visible,a:focus-visible{outline:3px solid var(--accent);outline-off
 .step figcaption{font-size:13px;color:var(--muted)}
 .vid{display:flex;gap:14px;align-items:center;text-decoration:none;color:var(--ink);background:var(--surface);border:1px solid var(--line);border-radius:12px;padding:12px 14px;max-width:520px;box-shadow:var(--shadow)}
 .vid:hover{border-color:var(--ink)}
+.sims{display:grid;gap:10px}
 .vid:focus-visible{outline:3px solid var(--accent);outline-offset:2px}
 .vid .play{flex:none;width:44px;height:44px;border-radius:50%;background:var(--accent);position:relative}
 .vid .play::after{content:"";position:absolute;left:17px;top:13px;border-style:solid;border-width:9px 0 9px 14px;border-color:transparent transparent transparent var(--accent-ink)}
@@ -1199,6 +1200,8 @@ const EXAM = [
 { k:"slit", title:"Slit lamp / fluorescein",
   why:"The anterior segment exam: the cornea and conjunctiva, anterior chamber, iris, and lens.",
   video:{url:"https://youtu.be/EOKh8zheBT4", title:"Slit Lamp Exam: ED Procedure Walkthrough", src:"miniEM · YouTube"},
+  sims:[{url:"slit-lamp.html#white", title:"Cell and flare", sub:"Sweep the beam through the anterior chamber and grade what you see"},
+        {url:"slit-lamp.html#cobalt", title:"Fluorescein patterns", sub:"Abrasion, ulcer and dendrite under cobalt blue"}],
   how:["Topical anesthetic if needed.","Apply a fluorescein strip moistened with saline.","Sweep with <b>white light first</b>: cornea, anterior chamber, pupil, lens.","Then switch to the <b>cobalt blue</b> filter and read the uptake pattern.","Use a Wood lamp if the patient can’t sit up for the slit lamp.","If you suspect an open globe, look for a <b>Seidel sign</b>. If it’s positive, put no pressure on the eye and shield it."],
   extra:`<div class="blk"><p class="blk-h">Fluorescein patterns</p>
     <div class="map">
@@ -1282,6 +1285,7 @@ function stepHTML(s,i){
     ${s.stop||""}
     ${s.how?`<div class="blk"><p class="blk-h">How to do it</p><ul class="dolist">${s.how.map(h=>`<li>${h}</li>`).join("")}</ul></div>`:""}
     ${s.video?`<a class="vid" href="${s.video.url}" target="_blank" rel="noopener"><span class="play" aria-hidden="true"></span><span><span class="vt">Watch: ${s.video.title}</span><span class="vs">${s.video.src}</span></span></a>`:""}
+    ${s.sims?`<div class="blk"><p class="blk-h">Try it: slit lamp simulator</p><div class="sims">${s.sims.map(m=>`<a class="vid" href="${m.url}"><span class="play" aria-hidden="true"></span><span><span class="vt">${m.title}</span><span class="vs">${m.sub}</span></span></a>`).join("")}</div></div>`:""}
     ${s.extra||""}
     ${s.catches?`<div class="blk"><p class="blk-h">What it helps catch</p><div class="catches">${s.catches.map(c=>`<span>${c}</span>`).join("")}</div></div>`:""}
     ${pitHTML}
