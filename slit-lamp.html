@@ -207,7 +207,7 @@ var CELL_DESC = [
 ];
 var LESION_DESC = {
   abrasion:['Linear epithelial defect', 'Dye pools along the scratch. The cornea beneath is clear, with no white spot before the dye goes in'],
-  geo:['Geographic epithelial defect', 'A sheet of epithelium is missing. Borders are crisp and the bed stains evenly, with no white spot beneath'],
+  geo:['Geographic epithelial defect', 'A sheet of epithelium is missing. The bed stains evenly, with no white spot beneath'],
   ulcer:['Defect over a white infiltrate', 'Edges blur as dye seeps into the stroma. The white spot is visible before staining'],
   dendrite:['Branching lesion with terminal bulbs', 'Herpes simplex epithelial keratitis. Each branch ends in a small bulb']
 };
@@ -397,8 +397,8 @@ function stainTexture(kind){
     streak(-2.1, -1.9, 1.0, -0.5, 0.5, 0.2);
     streak(-0.5, -0.55, 1.6, 0.25, 0.13, 0.07);
   } else if (kind === 'geo'){
-    // geographic defect: an even sheet of stain with crisp, slightly angular borders
-    var gx = 0.45, gy = -0.35; x.fillStyle = 'rgb(245,0,0)'; x.beginPath();
+    // geographic defect: an even sheet of stain with slightly angular borders
+    var gx = 0.45, gy = -0.35; x.fillStyle = 'rgb(205,0,0)'; x.beginPath();
     for (var gk = 0; gk <= 72; gk++){
       var gt = gk / 72 * 6.2832, gr = 1.25 + 0.2 * Math.sin(gt * 2 + 0.6) + 0.15 * Math.sin(gt * 3 + 2.1) + 0.07 * Math.sin(gt * 7 + 0.4);
       var gpx = X(gx + Math.cos(gt) * gr * 0.95), gpy = Y(gy + Math.sin(gt) * gr * 1.1);
@@ -448,8 +448,10 @@ function stainTexture(kind){
   }
   if (kind === 'ulcer'){ main.drawImage(lc, 0, 0); }
   else {                                       // soft, feathered edges: a blurred core plus a faint halo
-    var smN = kind === 'geo' ? 330 : kind === 'dendrite' ? 140 : 150, hzA = kind === 'geo' ? 0.1 : kind === 'dendrite' ? 0.6 : 0.38;
-    var sm = document.createElement('canvas'); sm.width = sm.height = smN; sm.getContext('2d').drawImage(lc, 0, 0, smN, smN);
+    var smN = kind === 'geo' ? 120 : kind === 'dendrite' ? 140 : 150, hzA = kind === 'geo' ? 0.2 : kind === 'dendrite' ? 0.6 : 0.38;
+    var rs = function(src, n){ var k = document.createElement('canvas'); k.width = k.height = n; var q = k.getContext('2d'); q.imageSmoothingEnabled = true; q.drawImage(src, 0, 0, n, n); return k; };
+    var sm = rs(lc, smN);
+    if (kind === 'geo') sm = rs(rs(rs(rs(rs(lc, 256), 128), 64), 128), 256);   // wide, smooth feather
     var hz = document.createElement('canvas'); hz.width = hz.height = 56; hz.getContext('2d').drawImage(lc, 0, 0, 56, 56);
     main.imageSmoothingEnabled = true;
     main.globalAlpha = 0.95; main.drawImage(sm, 0, 0, S, S);
