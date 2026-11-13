@@ -52,6 +52,8 @@ legend,.lab{padding:0;margin:0 0 6px;font-size:.72rem;font-weight:500;letter-spa
 .seg input:focus-visible+label{outline:2px solid var(--ink);outline-offset:2px}
 .desc{margin:6px 0 0;font-size:.86rem;color:var(--ink);min-height:2.6em}
 .desc small{display:block;color:var(--muted);font-size:.8rem}
+.seg.two{grid-auto-flow:row;grid-template-columns:1fr 1fr}
+.seg.two label{font-size:.8rem}
 .row2{display:grid;grid-template-columns:1fr;gap:14px}
 @media (min-width:520px) and (max-width:859px){.row2{grid-template-columns:1fr 1fr}}
 .sweep{display:grid;grid-template-columns:1fr auto;gap:10px;align-items:center}
@@ -105,8 +107,9 @@ footer p{margin:0 0 4px}
       <div class="group" id="cobalt-controls" hidden>
         <fieldset>
           <legend>Fluorescein finding</legend>
-          <div class="seg">
-            <input type="radio" name="lesion" id="lesion-abrasion" value="abrasion" checked><label for="lesion-abrasion">Abrasion</label>
+          <div class="seg two">
+            <input type="radio" name="lesion" id="lesion-abrasion" value="abrasion" checked><label for="lesion-abrasion">Linear abrasion</label>
+            <input type="radio" name="lesion" id="lesion-geo" value="geo"><label for="lesion-geo">Geographic abrasion</label>
             <input type="radio" name="lesion" id="lesion-ulcer" value="ulcer"><label for="lesion-ulcer">Ulcer</label>
             <input type="radio" name="lesion" id="lesion-dendrite" value="dendrite"><label for="lesion-dendrite">Dendrite</label>
           </div>
@@ -204,12 +207,13 @@ var CELL_DESC = [
 ];
 var LESION_DESC = {
   abrasion:['Linear epithelial defect', 'Dye pools along the scratch. The cornea beneath is clear, with no white spot before the dye goes in'],
+  geo:['Geographic epithelial defect', 'A sheet of epithelium is missing. Borders are crisp and the bed stains evenly, with no white spot beneath'],
   ulcer:['Defect over a white infiltrate', 'Edges blur as dye seeps into the stroma. The white spot is visible before staining'],
   dendrite:['Branching lesion with terminal bulbs', 'Herpes simplex epithelial keratitis. Each branch ends in a small bulb']
 };
 var LEDE = {
   white:'Drag across the eye to sweep the slit beam through the anterior chamber. Look in the dark gap between the cornea and the iris.',
-  cobalt:'Fluorescein under the cobalt blue filter, with a wide beam. Drag to turn the eye and compare the three staining patterns.'
+  cobalt:'Fluorescein under the cobalt blue filter, with a wide beam. Drag to turn the eye and compare the staining patterns.'
 };
 var FLARE_DESC = [
   ['None', 'The beam is invisible in the aqueous'],
@@ -360,7 +364,7 @@ cornea.renderOrder = 1; scene.add(cornea);
 function stainTexture(kind){
   var S = 512, c = document.createElement('canvas'); c.width = c.height = S;
   var x = c.getContext('2d'), h = S / 2, px = h / G.LIMB;
-  var seed = kind === 'abrasion' ? 11 : kind === 'ulcer' ? 23 : 41;
+  var seed = kind === 'abrasion' ? 11 : kind === 'ulcer' ? 23 : kind === 'geo' ? 57 : 41;
   function rnd(){ seed = (seed * 16807) % 2147483647; return seed / 2147483647; }
   function X(mm){ return h + mm * px; } function Y(mm){ return h - mm * px; }
   x.fillStyle = '#000'; x.fillRect(0, 0, S, S);
@@ -374,7 +378,7 @@ function stainTexture(kind){
     x.fillStyle = g; x.beginPath(); x.arc(X(Math.cos(a) * r), Y(Math.sin(a) * r), rr, 0, 6.2832); x.fill();
   }
   var main = x, lc = document.createElement('canvas'); lc.width = lc.height = S;
-  x = lc.getContext('2d'); x.globalCompositeOperation = 'lighter';
+  x = lc.getContext('2d'); x.globalCompositeOperation = kind === 'ulcer' ? 'lighter' : 'source-over';
   if (kind === 'abrasion'){
     // linear scratch: a tapered streak with a finer parallel one
     x.fillStyle = 'rgb(235,0,0)';
@@ -392,6 +396,15 @@ function stainTexture(kind){
     };
     streak(-2.1, -1.9, 1.0, -0.5, 0.5, 0.2);
     streak(-0.5, -0.55, 1.6, 0.25, 0.13, 0.07);
+  } else if (kind === 'geo'){
+    // geographic defect: an even sheet of stain with crisp, slightly angular borders
+    var gx = 0.45, gy = -0.35; x.fillStyle = 'rgb(245,0,0)'; x.beginPath();
+    for (var gk = 0; gk <= 72; gk++){
+      var gt = gk / 72 * 6.2832, gr = 1.25 + 0.2 * Math.sin(gt * 2 + 0.6) + 0.15 * Math.sin(gt * 3 + 2.1) + 0.07 * Math.sin(gt * 7 + 0.4);
+      var gpx = X(gx + Math.cos(gt) * gr * 0.95), gpy = Y(gy + Math.sin(gt) * gr * 1.1);
+      if (gk === 0) x.moveTo(gpx, gpy); else x.lineTo(gpx, gpy);
+    }
+    x.closePath(); x.fill();
   } else if (kind === 'ulcer'){
     var ux = 1.0, uy = -0.7;
     var gi = x.createRadialGradient(X(ux), Y(uy), 0, X(ux), Y(uy), 2.0 * px);      // infiltrate and surrounding haze
@@ -401,13 +414,13 @@ function stainTexture(kind){
     gs.addColorStop(0, 'rgb(255,0,0)'); gs.addColorStop(0.5, 'rgb(230,0,0)'); gs.addColorStop(0.78, 'rgb(90,0,0)'); gs.addColorStop(1, 'rgb(0,0,0)');
     x.fillStyle = gs; x.beginPath(); x.arc(X(ux), Y(uy), 1.35 * px, 0, 6.2832); x.fill();
   } else {
-    x.strokeStyle = 'rgb(215,0,0)'; x.fillStyle = 'rgb(215,0,0)'; x.lineCap = 'round'; x.lineJoin = 'round';
+    x.strokeStyle = 'rgb(150,0,0)'; x.fillStyle = 'rgb(150,0,0)'; x.lineCap = 'round'; x.lineJoin = 'round';
     var branch = function(bx, by, ang, len, depth, w){
-      var steps = 5, ax = bx, ay = by, a2 = ang;
+      var steps = 5, ax = bx, ay = by, a2 = ang, buds = [];
       x.lineWidth = w * px; x.beginPath(); x.moveTo(X(ax), Y(ay));
       for (var q = 0; q < steps; q++){
         a2 += (rnd() - 0.5) * 0.5; ax += Math.cos(a2) * len / steps; ay += Math.sin(a2) * len / steps;
-        x.lineTo(X(ax), Y(ay));
+        x.lineTo(X(ax), Y(ay)); buds.push([ax, ay, a2]);
         if (depth > 0 && q >= 1 && q < steps - 1 && rnd() < 0.5){
           x.stroke();
           branch(ax, ay, a2 + (rnd() < 0.5 ? 1 : -1) * (0.6 + rnd() * 0.5), len * 0.62, depth - 1, w * 0.85);
@@ -415,6 +428,13 @@ function stainTexture(kind){
         }
       }
       x.stroke();
+      for (var bi = 0; bi < buds.length - 1; bi++){                                   // knobby side buds give the feathery outline
+        if (rnd() > 0.45) continue;
+        var bd = buds[bi], ba = bd[2] + (rnd() < 0.5 ? 1 : -1) * (1.1 + rnd() * 0.6), bl = w * (0.9 + rnd() * 0.6);
+        var ex = bd[0] + Math.cos(ba) * bl, ey = bd[1] + Math.sin(ba) * bl;
+        x.lineWidth = w * 0.7 * px; x.beginPath(); x.moveTo(X(bd[0]), Y(bd[1])); x.lineTo(X(ex), Y(ey)); x.stroke();
+        x.beginPath(); x.arc(X(ex), Y(ey), w * 0.5 * px, 0, 6.2832); x.fill();
+      }
       if (depth > 0){
         branch(ax, ay, a2 + 0.5 + rnd() * 0.3, len * 0.6, depth - 1, w * 0.85);
         branch(ax, ay, a2 - 0.5 - rnd() * 0.3, len * 0.6, depth - 1, w * 0.85);
@@ -428,26 +448,27 @@ function stainTexture(kind){
   }
   if (kind === 'ulcer'){ main.drawImage(lc, 0, 0); }
   else {                                       // soft, feathered edges: a blurred core plus a faint halo
-    var sm = document.createElement('canvas'); sm.width = sm.height = 150; sm.getContext('2d').drawImage(lc, 0, 0, 150, 150);
+    var smN = kind === 'geo' ? 330 : kind === 'dendrite' ? 140 : 150, hzA = kind === 'geo' ? 0.1 : kind === 'dendrite' ? 0.6 : 0.38;
+    var sm = document.createElement('canvas'); sm.width = sm.height = smN; sm.getContext('2d').drawImage(lc, 0, 0, smN, smN);
     var hz = document.createElement('canvas'); hz.width = hz.height = 56; hz.getContext('2d').drawImage(lc, 0, 0, 56, 56);
     main.imageSmoothingEnabled = true;
     main.globalAlpha = 0.95; main.drawImage(sm, 0, 0, S, S);
-    main.globalAlpha = 0.38; main.drawImage(hz, 0, 0, S, S); main.globalAlpha = 1;
+    main.globalAlpha = hzA; main.drawImage(hz, 0, 0, S, S); main.globalAlpha = 1;
   }
   x = main;
   x.globalCompositeOperation = 'source-over';
   var tx = new THREE.CanvasTexture(c); tx.anisotropy = 4; return tx;
 }
-var STAINS = { abrasion:stainTexture('abrasion'), ulcer:stainTexture('ulcer'), dendrite:stainTexture('dendrite') };
-var uStain = { value:STAINS.abrasion }, uCobalt = { value:0 };
+var STAINS = { abrasion:stainTexture('abrasion'), geo:stainTexture('geo'), ulcer:stainTexture('ulcer'), dendrite:stainTexture('dendrite') };
+var uStain = { value:STAINS.abrasion }, uCobalt = { value:0 }, uPale = { value:0 };
 var stain = new THREE.Mesh(corneaGeo, new THREE.ShaderMaterial({
-  uniforms:{ uStain:uStain, uCobalt:uCobalt },
+  uniforms:{ uStain:uStain, uCobalt:uCobalt, uPale:uPale },
   vertexShader:SURF_VS,
   fragmentShader:[
-    'uniform sampler2D uStain; uniform float uCobalt; varying vec3 vW; varying vec3 vNrm; varying vec2 vUv;',
+    'uniform sampler2D uStain; uniform float uCobalt; uniform float uPale; varying vec3 vW; varying vec3 vNrm; varying vec2 vUv;',
     'void main(){',
     '  vec3 t = texture2D(uStain, vW.xy / ' + (2 * G.LIMB).toFixed(3) + ' + 0.5).rgb;',
-    '  vec3 dye = vec3(0.50, 1.0, 0.16) * (t.r * 1.25 + t.b * 0.22);',
+    '  vec3 dye = mix(vec3(0.50, 1.0, 0.16), vec3(0.60, 0.95, 0.42), uPale) * t.r * 1.25 + vec3(0.50, 1.0, 0.16) * t.b * 0.22;',
     '  vec3 infil = vec3(0.40, 0.52, 0.80) * t.g * 0.55;',
     '  gl_FragColor = vec4((dye + infil) * uCobalt, 1.0);',
     '}'
@@ -455,6 +476,48 @@ var stain = new THREE.Mesh(corneaGeo, new THREE.ShaderMaterial({
   transparent:true, depthWrite:false, blending:THREE.AdditiveBlending
 }));
 stain.renderOrder = 1.5; stain.visible = false; scene.add(stain);
+
+/* ---------- Eyelids with a tear meniscus (cobalt mode only, so the view from above stays open) ---------- */
+var lidGeo = new THREE.SphereGeometry(12.45, 120, 72, 0, Math.PI * 2, 0, 1.75);
+lidGeo.rotateX(Math.PI / 2); lidGeo.translate(0, 0, G.CS);
+var lids = new THREE.Mesh(lidGeo, new THREE.ShaderMaterial({
+  uniforms:withBeam({ uAmbient:uAmbient, uCobalt:uCobalt }),
+  vertexShader:[
+    'varying vec3 vW; varying vec3 vNrm;',
+    'void main(){',
+    '  vec4 w = modelMatrix * vec4(position, 1.0);',
+    '  float r2 = dot(w.xy, w.xy);',
+    '  if (r2 < ' + (G.RA * G.RA).toFixed(3) + ' && w.z > 0.0) w.z = max(w.z, ' + G.CA.toFixed(3) + ' + sqrt(' + (G.RA * G.RA).toFixed(3) + ' - r2) + 0.12);',
+    '  vW = w.xyz; vNrm = normalize(mat3(modelMatrix) * normal);',
+    '  gl_Position = projectionMatrix * viewMatrix * w;',
+    '}'
+  ].join('\n'),
+  fragmentShader:[
+    'uniform float uAmbient; uniform float uCobalt;',
+    BEAM_GLSL,
+    'uniform vec3 uTint;',
+    'varying vec3 vW; varying vec3 vNrm;',
+    'void main(){',
+    '  float yu = 4.6 - 0.035 * vW.x * vW.x;',
+    '  float yl = -5.9 + 0.03 * vW.x * vW.x;',
+    '  bool up = vW.y >= yu; bool lo = vW.y <= yl;',
+    '  if (!up && !lo) discard;',
+    '  float du = vW.y - yu; float dl = yl - vW.y;',
+    '  float d = (up && lo) ? min(du, dl) : (up ? du : dl);',
+    '  float wm = (lo && !up) ? 0.42 : 0.26;',
+    '  float men = 1.0 - smoothstep(wm * 0.45, wm, d);',
+    '  float margin = 1.0 - smoothstep(0.3, 1.5, d);',
+    '  vec3 skin = mix(vec3(0.74, 0.58, 0.48), vec3(0.62, 0.42, 0.38), margin);',
+    '  vec3 n = normalize(vNrm); vec3 v = normalize(cameraPosition - vW);',
+    '  float head = 0.35 + 0.65 * max(dot(n, v), 0.0);',
+    '  float ndl = max(dot(n, -uL), 0.0);',
+    '  vec3 col = skin * uAmbient * head + skin * uTint * (0.2 + ndl) * 0.5;',
+    '  col = mix(col, vec3(0.66, 1.0, 0.2) * ((lo && !up) ? 1.0 : 0.8), men * uCobalt);',
+    '  gl_FragColor = vec4(col, 1.0);',
+    '}'
+  ].join('\n')
+}));
+lids.visible = false; scene.add(lids);
 
 /* ---------- Light scattered inside the beam: corneal section, flare, lens section ---------- */
 var uFlare = { value:state.flareK }, uGain = { value:1 }, uGuide = { value:0 };
@@ -692,7 +755,7 @@ onRadio('cells', function(v){ state.cells = parseInt(v, 10); applyCells(); });
 onRadio('flare', function(v){ state.flare = parseInt(v, 10); applyFlare(); });
 onRadio('beam', function(v){ state.beam = v; applyBeam(); });
 onRadio('viewmode', function(v){ state.view = parseInt(v, 10); });
-function applyLesion(){ uStain.value = STAINS[state.lesion]; $('lesion-desc').innerHTML = descHTML(LESION_DESC[state.lesion]); }
+function applyLesion(){ uStain.value = STAINS[state.lesion]; uPale.value = state.lesion === 'dendrite' ? 1 : 0; $('lesion-desc').innerHTML = descHTML(LESION_DESC[state.lesion]); }
 function applyLight(){
   var cob = state.light === 'cobalt';
   $('white-controls').hidden = cob; $('cobalt-controls').hidden = !cob;
@@ -708,7 +771,7 @@ autoEl.addEventListener('click', function(){ setAuto(!state.auto); });
 
 var dragging = false, lastX = 0;
 canvas.addEventListener('pointerdown', function(ev){ dragging = true; lastX = ev.clientX; if (state.light !== 'cobalt') setAuto(false); try { canvas.setPointerCapture(ev.pointerId); } catch (e) {} });
-canvas.addEventListener('pointermove', function(ev){ if (!dragging) return; var dx = ev.clientX - lastX; lastX = ev.clientX; if (state.light === 'cobalt') state.yaw = Math.max(-0.75, Math.min(0.75, state.yaw - dx * 0.007)); else setSweep(state.sweep + dx * mmPerPx); });
+canvas.addEventListener('pointermove', function(ev){ if (!dragging) return; var dx = ev.clientX - lastX; lastX = ev.clientX; if (state.light === 'cobalt') state.yaw = Math.max(-0.35, Math.min(0.35, state.yaw - dx * 0.005)); else setSweep(state.sweep + dx * mmPerPx); });
 function endDrag(){ dragging = false; }
 canvas.addEventListener('pointerup', endDrag); canvas.addEventListener('pointercancel', endDrag);
 
@@ -736,7 +799,7 @@ function frame(){
   if (Math.abs((cob ? 1 : 0) - state.cobaltT) < 0.002) state.cobaltT = cob ? 1 : 0;
   state.yawT += (state.yaw - state.yawT) * Math.min(1, dt * 10);
   var ct = state.cobaltT; U.uTint.value.set(1 - 0.9 * ct, 1 - 0.76 * ct, 1);
-  uCobalt.value = ct; stain.visible = ct > 0.01; volume.visible = ct < 0.99;
+  uCobalt.value = ct; stain.visible = ct > 0.01; lids.visible = ct > 0.01; volume.visible = ct < 0.99;
   state.flareK += (FLARE_K[state.flare] - state.flareK) * Math.min(1, dt * 6); uFlare.value = state.flareK;
   state.haze += (FLARE_HAZE[state.flare] - state.haze) * Math.min(1, dt * 6); uHaze.value = state.haze;
   stepCells(dt, tAccum);
