@@ -31,6 +31,8 @@ header h1{font-size:1.3rem;font-weight:600;margin:0 0 2px;letter-spacing:-0.01em
 header p{margin:0;color:var(--muted);max-width:60ch}
 .layout{display:grid;gap:14px}
 .stage{position:relative;aspect-ratio:5/4;background:#04060a;border:1px solid var(--line);border-radius:10px;overflow:hidden}
+.stage::after{content:"";position:absolute;inset:0;pointer-events:none;z-index:1;background:radial-gradient(ellipse at center,rgba(0,0,0,0) 58%,rgba(0,0,0,.5) 100%)}
+.tag,.examiner{z-index:2}
 .stage canvas{display:block;width:100%;height:100%;touch-action:pan-y;cursor:ew-resize}
 .viewcol{display:grid;gap:8px;min-width:0}
 .readout{display:flex;align-items:baseline;justify-content:space-between;gap:8px;padding:6px 12px;border-radius:8px;background:var(--panel);border:1px solid var(--line);font-family:var(--font-mono);font-size:.8rem;color:var(--muted)}
@@ -247,15 +249,16 @@ var U = {
   uP0:{ value:new THREE.Vector3(state.sweep, 0, 0) },
   uL:{ value:Lvec }, uN:{ value:Nvec },
   uHalfW:{ value:0.15 }, uHalfH:{ value:4.0 },
-  uTint:{ value:new THREE.Vector3(1, 1, 1) }
+  uTint:{ value:new THREE.Vector3(1, 1, 1) },
+  uFlat:{ value:0 }
 };
 function withBeam(extra){
-  var o = { uP0:U.uP0, uL:U.uL, uN:U.uN, uHalfW:U.uHalfW, uHalfH:U.uHalfH, uTint:U.uTint };
+  var o = { uP0:U.uP0, uL:U.uL, uN:U.uN, uHalfW:U.uHalfW, uHalfH:U.uHalfH, uTint:U.uTint, uFlat:U.uFlat };
   for (var k in extra) o[k] = extra[k];
   return o;
 }
 var BEAM_GLSL = [
-  'uniform vec3 uP0; uniform vec3 uL; uniform vec3 uN; uniform float uHalfW; uniform float uHalfH;',
+  'uniform vec3 uP0; uniform vec3 uL; uniform vec3 uN; uniform float uHalfW; uniform float uHalfH; uniform float uFlat;',
   'float beamMask(vec3 p){',
   '  float d = abs(dot(p - uP0, uN));',
   '  float e = abs(p.y - uP0.y);',
@@ -277,24 +280,48 @@ var SURF_VS = [
   '}'
 ].join('\n');
 var SURF_FS = [
-  'uniform vec3 uColor; uniform sampler2D uMap; uniform float uUseMap; uniform float uAmbient; uniform float uHaze; uniform vec3 uTint;',
+  'uniform vec3 uColor; uniform sampler2D uMap; uniform float uUseMap; uniform float uAmbient; uniform float uHaze; uniform vec3 uTint; uniform float uFilm;',
   BEAM_GLSL,
   'varying vec3 vW; varying vec3 vNrm; varying vec2 vUv;',
   'void main(){',
   '  vec3 base = uColor;',
-  '  if (uUseMap > 0.5) base = texture2D(uMap, vUv).rgb;',
+  '  if (uUseMap > 1.5) base = texture2D(uMap, vW.xy / 24.0 + 0.5).rgb;',
+  '  else if (uUseMap > 0.5) base = texture2D(uMap, vUv).rgb;',
   '  vec3 n = normalize(vNrm);',
   '  vec3 v = normalize(cameraPosition - vW);',
   '  float head = 0.35 + 0.65 * max(dot(n, v), 0.0);',
-  '  float ndl = max(dot(n, -uL), 0.0);',
+  '  float ndl = mix(max(dot(n, -uL), 0.0), 0.12 + 0.7 * max(dot(n, v), 0.0), uFlat);',
   '  float m = beamMask(vW);',
   '  vec3 litBase = mix(base, vec3(0.62, 0.60, 0.58), uHaze);',
   '  vec3 col = base * uAmbient * head + litBase * uTint * m * ndl * 2.0;',
+  '  col += vec3(0.22, 0.85, 0.30) * uFilm * m * 0.09;',
   '  gl_FragColor = vec4(col, 1.0);',
   '}'
 ].join('\n');
 
-var uAmbient = { value:0.1 }, uHaze = { value:0 };
+var uAmbient = { value:0.1 }, uHaze = { value:0 }, uFilmS = { value:0 };
+
+function scleraTexture(){
+  // conjunctival vessels: fine, tortuous, branching toward the limbus
+  var S = 1024, c = document.createElement('canvas'); c.width = c.height = S;
+  var x = c.getContext('2d'), h = S / 2, px = h / 12;
+  x.fillStyle = 'rgb(236,230,221)'; x.fillRect(0, 0, S, S);
+  var seed = 5; function rnd(){ seed = (seed * 16807) % 2147483647; return seed / 2147483647; }
+  x.lineCap = 'round';
+  var vessel = function(a, r, w, depth){
+    var steps = 26, ang = a, rr = r;
+    x.strokeStyle = 'rgba(' + (150 + Math.floor(rnd() * 40)) + ',' + (38 + Math.floor(rnd() * 22)) + ',42,' + (0.28 + rnd() * 0.3) + ')';
+    x.lineWidth = w * px; x.beginPath(); x.moveTo(h + Math.cos(ang) * rr * px, h - Math.sin(ang) * rr * px);
+    for (var i = 0; i < steps && rr > 6.75; i++){
+      rr -= 0.18 + rnd() * 0.1; ang += (rnd() - 0.5) * 0.045;
+      x.lineTo(h + Math.cos(ang) * rr * px, h - Math.sin(ang) * rr * px);
+      if (depth > 0 && rnd() < 0.07){ x.stroke(); vessel(ang + (rnd() - 0.5) * 0.25, rr, w * 0.6, depth - 1); x.lineWidth = w * px; x.beginPath(); x.moveTo(h + Math.cos(ang) * rr * px, h - Math.sin(ang) * rr * px); }
+    }
+    x.stroke();
+  };
+  for (var k = 0; k < 64; k++) vessel(rnd() * 6.2832, 9.5 + rnd() * 2.2, 0.05 + rnd() * 0.09, 2);
+  var t = new THREE.CanvasTexture(c); t.anisotropy = 4; return t;
+}
 
 function irisTexture(){
   var S = 512, c = document.createElement('canvas'); c.width = c.height = S;
@@ -327,13 +354,13 @@ var capS = Math.asin(G.LIMB / G.RS);
 var scleraGeo = new THREE.SphereGeometry(G.RS, 72, 48, 0, Math.PI * 2, capS, Math.PI - capS);
 scleraGeo.rotateX(Math.PI / 2); scleraGeo.translate(0, 0, G.CS);
 scene.add(new THREE.Mesh(scleraGeo, new THREE.ShaderMaterial({
-  uniforms:withBeam({ uColor:{ value:new THREE.Color(0.93, 0.90, 0.86) }, uMap:{ value:null }, uUseMap:{ value:0 }, uAmbient:uAmbient, uHaze:{ value:0 } }),
+  uniforms:withBeam({ uColor:{ value:new THREE.Color(0.93, 0.90, 0.86) }, uMap:{ value:scleraTexture() }, uUseMap:{ value:2 }, uAmbient:uAmbient, uHaze:{ value:0 }, uFilm:uFilmS }),
   vertexShader:SURF_VS, fragmentShader:SURF_FS
 })));
 
 var irisTex = irisTexture();
 scene.add(new THREE.Mesh(new THREE.RingGeometry(G.PUPIL, G.LIMB, 96, 1), new THREE.ShaderMaterial({
-  uniforms:withBeam({ uColor:{ value:new THREE.Color(0.5, 0.4, 0.3) }, uMap:{ value:irisTex }, uUseMap:{ value:1 }, uAmbient:uAmbient, uHaze:uHaze }),
+  uniforms:withBeam({ uColor:{ value:new THREE.Color(0.5, 0.4, 0.3) }, uMap:{ value:irisTex }, uUseMap:{ value:1 }, uAmbient:uAmbient, uHaze:uHaze, uFilm:{ value:0 } }),
   vertexShader:SURF_VS, fragmentShader:SURF_FS
 })));
 
@@ -341,19 +368,20 @@ var pupil = new THREE.Mesh(new THREE.CircleGeometry(G.PUPIL + 0.03, 64), new THR
 pupil.position.z = -0.03; scene.add(pupil);
 
 /* ---------- Cornea: faint rim sheen so the dome reads in 3D ---------- */
-var uSheen = { value:0.1 };
+var uSheen = { value:0.1 }, uSpec = { value:0 };
 var capA = Math.asin(G.LIMB / G.RA);
 var corneaGeo = new THREE.SphereGeometry(G.RA, 72, 32, 0, Math.PI * 2, 0, capA);
 corneaGeo.rotateX(Math.PI / 2); corneaGeo.translate(0, 0, G.CA);
 var cornea = new THREE.Mesh(corneaGeo, new THREE.ShaderMaterial({
-  uniforms:{ uSheen:uSheen },
+  uniforms:{ uSheen:uSheen, uSpec:uSpec, uL:U.uL },
   vertexShader:SURF_VS,
   fragmentShader:[
-    'uniform float uSheen; varying vec3 vW; varying vec3 vNrm; varying vec2 vUv;',
+    'uniform float uSheen; uniform float uSpec; uniform vec3 uL; varying vec3 vW; varying vec3 vNrm; varying vec2 vUv;',
     'void main(){',
     '  vec3 n = normalize(vNrm); vec3 v = normalize(cameraPosition - vW);',
     '  float f = pow(1.0 - abs(dot(n, v)), 2.5);',
-    '  gl_FragColor = vec4(vec3(0.60, 0.76, 0.92) * f * uSheen, 1.0);',
+    '  float sp = pow(max(dot(n, normalize(v - uL)), 0.0), 2600.0) * step(0.0, dot(n, v));',
+    '  gl_FragColor = vec4(vec3(0.60, 0.76, 0.92) * f * uSheen + vec3(0.85, 0.93, 1.0) * sp * 3.0 * uSpec, 1.0);',
     '}'
   ].join('\n'),
   transparent:true, depthWrite:false, blending:THREE.AdditiveBlending, side:THREE.DoubleSide
@@ -448,11 +476,11 @@ function stainTexture(kind){
   }
   if (kind === 'ulcer'){ main.drawImage(lc, 0, 0); }
   else {                                       // soft, feathered edges: a blurred core plus a faint halo
-    var smN = kind === 'geo' ? 120 : kind === 'dendrite' ? 140 : 150, hzA = kind === 'geo' ? 0.2 : kind === 'dendrite' ? 0.6 : 0.38;
+    var hzA = kind === 'geo' ? 0.2 : kind === 'dendrite' ? 0.6 : 0.38;
     var rs = function(src, n){ var k = document.createElement('canvas'); k.width = k.height = n; var q = k.getContext('2d'); q.imageSmoothingEnabled = true; q.drawImage(src, 0, 0, n, n); return k; };
-    var sm = rs(lc, smN);
+    var sm = rs(rs(rs(lc, 256), 128), 256);
     if (kind === 'geo') sm = rs(rs(rs(rs(rs(lc, 256), 128), 64), 128), 256);   // wide, smooth feather
-    var hz = document.createElement('canvas'); hz.width = hz.height = 56; hz.getContext('2d').drawImage(lc, 0, 0, 56, 56);
+    var hz = rs(rs(rs(rs(lc, 256), 128), 64), 128);
     main.imageSmoothingEnabled = true;
     main.globalAlpha = 0.95; main.drawImage(sm, 0, 0, S, S);
     main.globalAlpha = hzA; main.drawImage(hz, 0, 0, S, S); main.globalAlpha = 1;
@@ -479,7 +507,7 @@ var stain = new THREE.Mesh(corneaGeo, new THREE.ShaderMaterial({
 }));
 stain.renderOrder = 1.5; stain.visible = false; scene.add(stain);
 
-/* ---------- Eyelids with a tear meniscus (cobalt mode only, so the view from above stays open) ---------- */
+/* ---------- Eyelids with a tear meniscus (hidden in the view from above, which they would block) ---------- */
 var lidGeo = new THREE.SphereGeometry(12.45, 120, 72, 0, Math.PI * 2, 0, 1.75);
 lidGeo.rotateX(Math.PI / 2); lidGeo.translate(0, 0, G.CS);
 var lids = new THREE.Mesh(lidGeo, new THREE.ShaderMaterial({
@@ -512,14 +540,45 @@ var lids = new THREE.Mesh(lidGeo, new THREE.ShaderMaterial({
     '  vec3 skin = mix(vec3(0.74, 0.58, 0.48), vec3(0.62, 0.42, 0.38), margin);',
     '  vec3 n = normalize(vNrm); vec3 v = normalize(cameraPosition - vW);',
     '  float head = 0.35 + 0.65 * max(dot(n, v), 0.0);',
-    '  float ndl = max(dot(n, -uL), 0.0);',
-    '  vec3 col = skin * uAmbient * head + skin * uTint * (0.2 + ndl) * 0.5;',
+    '  float ndl = mix(max(dot(n, -uL), 0.0), 0.12 + 0.7 * max(dot(n, v), 0.0), uFlat);',
+    '  vec3 col = skin * uAmbient * head * 0.8 + skin * uTint * (0.2 + ndl) * 0.5 * beamMask(vW);',
     '  col = mix(col, vec3(0.66, 1.0, 0.2) * ((lo && !up) ? 1.0 : 0.8), men * uCobalt);',
     '  gl_FragColor = vec4(col, 1.0);',
     '}'
   ].join('\n')
 }));
 lids.visible = false; scene.add(lids);
+
+/* ---------- Lashes: fine curved strokes; a few pick up dye ---------- */
+var lashes = (function(){
+  var P = [], D = [], seed = 97; function rnd(){ seed = (seed * 16807) % 2147483647; return seed / 2147483647; }
+  function lidZ(x, y){
+    var r2 = x * x + y * y, z = G.CS + Math.sqrt(Math.max(12.45 * 12.45 - r2, 0));
+    if (r2 < G.RA * G.RA) z = Math.max(z, G.CA + Math.sqrt(G.RA * G.RA - r2) + 0.12);
+    return z;
+  }
+  function lash(x0, y0, up, len, lean, dye){
+    var z0 = lidZ(x0, y0) + 0.06, prev = null, N = 6;
+    for (var i = 0; i <= N; i++){
+      var s = i / N;
+      var cur = [x0 + lean * s, up ? y0 + (-0.5 * s + 1.6 * s * s) * len * 0.5 : y0 - (0.15 * s + 0.85 * s * s) * len * 0.55, z0 + (up ? 2.2 : 1.5) * len * s * (1 - 0.35 * s)];
+      if (prev) for (var o = 0; o < 2; o++){ P.push(prev[0] + o * 0.04, prev[1], prev[2], cur[0] + o * 0.04, cur[1], cur[2]); D.push(dye, dye); }
+      prev = cur;
+    }
+  }
+  var xx;
+  for (xx = -10.5; xx <= 10.5; xx += 0.24){ var xu = xx + (rnd() - 0.5) * 0.2; lash(xu, 4.6 - 0.035 * xu * xu + 0.1, true, 0.7 + rnd() * 0.55, (rnd() - 0.5) * 0.6 + xu * 0.05, rnd() < 0.12 ? 1 : 0); }
+  for (xx = -9.5; xx <= 9.5; xx += 0.42){ var xl = xx + (rnd() - 0.5) * 0.3; lash(xl, -5.9 + 0.03 * xl * xl - 0.12, false, 0.5 + rnd() * 0.45, (rnd() - 0.5) * 0.5 + xl * 0.04, rnd() < 0.35 ? 1 : 0); }
+  var g = new THREE.BufferGeometry();
+  g.setAttribute('position', new THREE.BufferAttribute(new Float32Array(P), 3));
+  g.setAttribute('aDye', new THREE.BufferAttribute(new Float32Array(D), 1));
+  var m = new THREE.LineSegments(g, new THREE.ShaderMaterial({
+    uniforms:{ uCobalt:uCobalt },
+    vertexShader:'attribute float aDye; varying float vDye; void main(){ vDye = aDye; gl_Position = projectionMatrix * modelViewMatrix * vec4(position, 1.0); }',
+    fragmentShader:'uniform float uCobalt; varying float vDye; void main(){ gl_FragColor = vec4(mix(vec3(0.02, 0.02, 0.04), vec3(0.42, 0.92, 0.20), vDye * uCobalt), 1.0); }'
+  }));
+  m.visible = false; m.frustumCulled = false; scene.add(m); return m;
+})();
 
 /* ---------- Light scattered inside the beam: corneal section, flare, lens section ---------- */
 var uFlare = { value:state.flareK }, uGain = { value:1 }, uGuide = { value:0 };
@@ -744,7 +803,7 @@ function descHTML(d){ return d[0] + '<small>' + d[1] + '</small>'; }
 function applyCells(){ uCount.value = state.light === 'cobalt' ? 0 : CELL_COUNTS[state.cells]; $('cells-desc').innerHTML = descHTML(CELL_DESC[state.cells]); lastCount = -1; }
 function applyFlare(){ $('flare-desc').innerHTML = descHTML(FLARE_DESC[state.flare]); }
 function applyBeam(){
-  if (state.light === 'cobalt'){ U.uHalfW.value = 9; U.uHalfH.value = 9; $('count-label').textContent = 'Fluorescein, cobalt blue filter'; countEl.textContent = ''; }
+  if (state.light === 'cobalt'){ U.uHalfW.value = 30; U.uHalfH.value = 30; $('count-label').textContent = 'Fluorescein, cobalt blue filter'; countEl.textContent = ''; }
   else if (state.beam === 'tall'){ U.uHalfW.value = 0.15; U.uHalfH.value = 4.0; $('count-label').textContent = 'Cells in tall slit'; }
   else { U.uHalfW.value = 0.5; U.uHalfH.value = 0.5; $('count-label').textContent = 'Cells in 1 × 1 mm field'; }
   lastCount = -1;
@@ -801,7 +860,8 @@ function frame(){
   if (Math.abs((cob ? 1 : 0) - state.cobaltT) < 0.002) state.cobaltT = cob ? 1 : 0;
   state.yawT += (state.yaw - state.yawT) * Math.min(1, dt * 10);
   var ct = state.cobaltT; U.uTint.value.set(1 - 0.9 * ct, 1 - 0.76 * ct, 1);
-  uCobalt.value = ct; stain.visible = ct > 0.01; lids.visible = ct > 0.01; volume.visible = ct < 0.99;
+  uCobalt.value = ct; U.uFlat.value = ct; uFilmS.value = ct; uSpec.value = ct; stain.visible = ct > 0.01; volume.visible = ct < 0.99;
+  lids.visible = lashes.visible = ct > 0.01 || state.viewT < 0.02;   // lids would block the view from above
   state.flareK += (FLARE_K[state.flare] - state.flareK) * Math.min(1, dt * 6); uFlare.value = state.flareK;
   state.haze += (FLARE_HAZE[state.flare] - state.haze) * Math.min(1, dt * 6); uHaze.value = state.haze;
   stepCells(dt, tAccum);
